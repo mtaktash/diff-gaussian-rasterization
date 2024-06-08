@@ -20,6 +20,7 @@
 #include <memory>
 #include "cuda_rasterizer/config.h"
 #include "cuda_rasterizer/rasterizer.h"
+#include "cuda_rasterizer/utils.h"
 #include <fstream>
 #include <string>
 #include <functional>
@@ -32,7 +33,7 @@ std::function<char*(size_t N)> resizeFunctional(torch::Tensor& t) {
     return lambda;
 }
 
-std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 RasterizeGaussiansCUDA(
 	const torch::Tensor& background,
 	const torch::Tensor& means3D,
@@ -67,6 +68,7 @@ RasterizeGaussiansCUDA(
 
   torch::Tensor out_color = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
   torch::Tensor radii = torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
+  torch::Tensor is_used = torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
   
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
@@ -108,10 +110,11 @@ RasterizeGaussiansCUDA(
 		tan_fovy,
 		prefiltered,
 		out_color.contiguous().data<float>(),
+		is_used.contiguous().data<int>(),
 		radii.contiguous().data<int>(),
 		debug);
   }
-  return std::make_tuple(rendered, out_color, radii, geomBuffer, binningBuffer, imgBuffer);
+  return std::make_tuple(rendered, out_color, radii, geomBuffer, binningBuffer, imgBuffer, is_used);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
@@ -214,4 +217,32 @@ torch::Tensor markVisible(
   }
   
   return present;
+}
+
+std::tuple<torch::Tensor, torch::Tensor> ComputeRelocationCUDA(
+	torch::Tensor& opacity_old,
+	torch::Tensor& scale_old,
+	torch::Tensor& N,
+	torch::Tensor& binoms,
+	const int n_max)
+{
+	const int P = opacity_old.size(0);
+  
+	torch::Tensor final_opacity = torch::full({P}, 0, opacity_old.options().dtype(torch::kFloat32));
+	torch::Tensor final_scale = torch::full({3 * P}, 0, scale_old.options().dtype(torch::kFloat32));
+
+	if(P != 0)
+	{
+		UTILS::ComputeRelocation(P,
+			opacity_old.contiguous().data<float>(),
+			scale_old.contiguous().data<float>(),
+			N.contiguous().data<int>(),
+			binoms.contiguous().data<float>(),
+			n_max,
+			final_opacity.contiguous().data<float>(),
+			final_scale.contiguous().data<float>());
+	}
+
+	return std::make_tuple(final_opacity, final_scale);
+
 }
