@@ -227,7 +227,7 @@ std::tuple<torch::Tensor, torch::Tensor> ComputeRelocationCUDA(
 	const int n_max)
 {
 	const int P = opacity_old.size(0);
-
+	
 	torch::Tensor final_opacity = torch::full({P}, 0, opacity_old.options().dtype(torch::kFloat32));
 	torch::Tensor final_scale = torch::full({3 * P}, 0, scale_old.options().dtype(torch::kFloat32));
 
