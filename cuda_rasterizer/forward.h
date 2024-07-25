@@ -60,6 +60,7 @@ namespace FORWARD
 		uint32_t* n_contrib,
 		const float* bg_color,
 		float* out_color,
+		const float* depth,
 	    float* out_depth);
 }
 
