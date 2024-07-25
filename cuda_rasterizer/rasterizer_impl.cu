@@ -332,6 +332,7 @@ int CudaRasterizer::Rasterizer::forward(
 		imgState.n_contrib,
 		background,
 		out_color,
+		geomState.depths,
 		out_depth), debug)
 
 	return num_rendered;
