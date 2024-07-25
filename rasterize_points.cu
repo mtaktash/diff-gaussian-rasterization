@@ -214,7 +214,7 @@ torch::Tensor markVisible(
   return present;
 }
 
-d::tuple<torch::Tensor, torch::Tensor> ComputeRelocationCUDA(
+std::tuple<torch::Tensor, torch::Tensor> ComputeRelocationCUDA(
 	torch::Tensor& opacity_old,
 	torch::Tensor& scale_old,
 	torch::Tensor& N,
