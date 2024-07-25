@@ -34,8 +34,7 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& sh,
 	const int degree,
 	const torch::Tensor& campos,
-	const bool prefiltered,
-	const bool debug);
+	const bool prefiltered);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizeGaussiansBackwardCUDA(
@@ -58,17 +57,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	const torch::Tensor& geomBuffer,
 	const int R,
 	const torch::Tensor& binningBuffer,
-	const torch::Tensor& imageBuffer,
-	const bool debug);
+	const torch::Tensor& imageBuffer);
 		
 torch::Tensor markVisible(
 		torch::Tensor& means3D,
 		torch::Tensor& viewmatrix,
 		torch::Tensor& projmatrix);
-
-std::tuple<torch::Tensor, torch::Tensor> ComputeRelocationCUDA(
-		torch::Tensor& opacity_old,
-		torch::Tensor& scale_old,
-		torch::Tensor& N,
-		torch::Tensor& binoms,
-		const int n_max);
