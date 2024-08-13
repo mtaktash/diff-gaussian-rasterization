@@ -305,6 +305,7 @@ renderCUDA(
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
 	float D = 0.0f;  // Mean Depth
+	float Weight = 0.0f;
     // float D = 15.0f;  // Median Depth. TODO: This is a hack setting max_depth to 15
 
 	// Iterate over batches until all done or range is complete
@@ -363,6 +364,7 @@ renderCUDA(
             // Mean depth:
             float dep = collected_depth[j];
             D += dep * alpha * T;
+			Weight += alpha * T;
 
             // // Median depth:
             // if (T > 0.5f && test_T < 0.5)
@@ -388,7 +390,7 @@ renderCUDA(
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
-		out_depth[pix_id] = D;
+		out_depth[pix_id] = D / Weight;
 	}
 }
 
