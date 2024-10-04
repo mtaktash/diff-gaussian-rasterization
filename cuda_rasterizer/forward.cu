@@ -390,8 +390,8 @@ renderCUDA(
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
-		// out_depth[pix_id] = D / Weight;
-		out_depth[pix_id] = D;
+		// out_depth[pix_id] = D / Weight; // Mean depth
+		out_depth[pix_id] = D; // Median depth
 	}
 }
 
