@@ -17,3 +17,8 @@ Used as the rasterization engine for the paper "3D Gaussian Splatting for Real-T
 }</code></pre>
   </div>
 </section>
+
+# Updates
+
+- Updated with depth rendering from https://github.com/slothfulxtx/diff-gaussian-rasterization/
+- 3DGS-MCMC implementation from https://github.com/shakibakh/diff-gaussian-rasterization/
