@@ -193,6 +193,7 @@ class _RasterizeGaussians(torch.autograd.Function):
                     grad_sh,
                     grad_scales,
                     grad_rotations,
+                    grad_colors_by_means_sqr,
                 ) = _C.rasterize_gaussians_backward(*args)
             except Exception as ex:
                 torch.save(cpu_args, "snapshot_bw.dump")
@@ -210,7 +211,10 @@ class _RasterizeGaussians(torch.autograd.Function):
                 grad_sh,
                 grad_scales,
                 grad_rotations,
+                grad_colors_by_means_sqr,
             ) = _C.rasterize_gaussians_backward(*args)
+
+        means3D.grad_colors_by_means_sqr = grad_colors_by_means_sqr
 
         grads = (
             grad_means3D,

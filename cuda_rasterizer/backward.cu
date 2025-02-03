@@ -412,7 +412,8 @@ renderCUDA(
 	float3* __restrict__ dL_dmean2D,
 	float4* __restrict__ dL_dconic2D,
 	float* __restrict__ dL_dopacity,
-	float* __restrict__ dL_dcolors)
+	float* __restrict__ dL_dcolors,
+	float2* __restrict__ dcolors_dmean2D_sqr)
 {
 	// We rasterize again. Compute necessary block info.
 	auto block = cg::this_thread_block();
@@ -533,7 +534,7 @@ renderCUDA(
 				bg_dot_dpixel += bg_color[i] * dL_dpixel[i];
 			dL_dalpha += (-T_final / (1.f - alpha)) * bg_dot_dpixel;
 
-
+			
 			// Helpful reusable temporary variables
 			const float dL_dG = con_o.w * dL_dalpha;
 			const float gdx = G * d.x;
@@ -552,6 +553,10 @@ renderCUDA(
 
 			// Update gradients w.r.t. opacity of the Gaussian
 			atomicAdd(&(dL_dopacity[global_id]), G * dL_dalpha);
+
+			// Update gradients of 2d means w.r.t. pixel colors
+			atomicAdd(&dcolors_dmean2D_sqr[global_id].x, pow(dL_dmean2D[global_id].x / (dL_dcolors[global_id] + 1e-6f), 2.0));
+			atomicAdd(&dcolors_dmean2D_sqr[global_id].y, pow(dL_dmean2D[global_id].y / (dL_dcolors[global_id] + 1e-6f), 2.0));
 		}
 	}
 }
@@ -636,7 +641,8 @@ void BACKWARD::render(
 	float3* dL_dmean2D,
 	float4* dL_dconic2D,
 	float* dL_dopacity,
-	float* dL_dcolors)
+	float* dL_dcolors,
+	float2* dcolors_dmean2D_sqr)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> >(
 		ranges,
@@ -652,6 +658,7 @@ void BACKWARD::render(
 		dL_dmean2D,
 		dL_dconic2D,
 		dL_dopacity,
-		dL_dcolors
+		dL_dcolors,
+		dcolors_dmean2D_sqr
 		);
 }
