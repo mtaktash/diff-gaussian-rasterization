@@ -30,13 +30,11 @@ namespace BACKWARD
     const float4* conic_opacity,
     const float* colors,
     const float* depths,
-    const float* norms,
     const float* extras,
     const float* accum_alphas,
     const uint32_t* n_contrib,
     const float* dL_dpixels,
     const float* dL_dpixel_depths,
-    const float* dL_dpixel_norms,
     const float* dL_dpixel_alphas,
     const float* dL_dpixel_extras,
     float3* dL_dmean2D,
@@ -44,7 +42,6 @@ namespace BACKWARD
     float* dL_dopacity,
     float* dL_dcolors,
     float* dL_ddepths,
-    float* dL_dnorm3Ds,
     float* dL_dextras);
 
   void preprocess(
@@ -57,8 +54,6 @@ namespace BACKWARD
     const glm::vec4* rotations,
     const float scale_modifier,
     const float* cov3Ds,
-    const glm::vec3* norm3Ds,
-    bool is_norm3Ds_precomp,
     const float* view,
     const float* proj,
     const float focal_x, float focal_y,
@@ -70,7 +65,6 @@ namespace BACKWARD
     float* dL_dcolor,
     float* dL_ddepth,
     float* dL_dcov3D,
-    glm::vec3* dL_dnorm3D,
     float* dL_dsh,
     glm::vec3* dL_dscale,
     glm::vec4* dL_drot);

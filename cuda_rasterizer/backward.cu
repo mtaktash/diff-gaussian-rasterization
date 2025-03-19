@@ -400,8 +400,6 @@ __global__ void preprocessCUDA(
   const float3* means,
   const int* radii,
   const float* shs,
-  const glm::vec3* norm3Ds,
-  bool is_norm3Ds_precomp,
   const bool* clamped,
   const glm::vec3* scales,
   const glm::vec4* rotations,
@@ -414,7 +412,6 @@ __global__ void preprocessCUDA(
   float* dL_dcolor,
   float* dL_ddepth,
   float* dL_dcov3D,
-  glm::vec3* dL_dnorm3D,
   float* dL_dsh,
   glm::vec3* dL_dscale,
   glm::vec4* dL_drot)
@@ -464,9 +461,6 @@ __global__ void preprocessCUDA(
   if (scales)
     computeCov3D(idx, scales[idx], scale_modifier, rotations[idx], dL_dcov3D, dL_dscale, dL_drot);
     
-  if (!is_norm3Ds_precomp)
-    computeNorm3D(idx, scales[idx], rotations[idx], norm3Ds[idx], dL_dnorm3D[idx], dL_dscale, dL_drot);
-  
 }
 
 // Backward version of the rendering procedure.
@@ -481,13 +475,11 @@ renderCUDA(
   const float4* __restrict__ conic_opacity,
   const float* __restrict__ colors,
   const float* __restrict__ depths,
-  const float* __restrict__ norms,
   const float* __restrict__ extras,
   const float* __restrict__ accum_alphas,
   const uint32_t* __restrict__ n_contrib,
   const float* __restrict__ dL_dpixels,
   const float* __restrict__ dL_dpixel_depths,
-  const float* __restrict__ dL_dpixel_norms,
   const float* __restrict__ dL_dpixel_alphas,
   const float* __restrict__ dL_dpixel_extras,
   float3* __restrict__ dL_dmean2D,
@@ -495,7 +487,6 @@ renderCUDA(
   float* __restrict__ dL_dopacity,
   float* __restrict__ dL_dcolors,
   float* __restrict__ dL_ddepths,
-  float* __restrict__ dL_dnorm3Ds,
   float* __restrict__ dL_dextras)
 {
   // We rasterize again. Compute necessary block info.
@@ -520,7 +511,6 @@ renderCUDA(
   __shared__ float4 collected_conic_opacity[BLOCK_SIZE];
   __shared__ float collected_colors[C * BLOCK_SIZE];
   __shared__ float collected_depths[BLOCK_SIZE];
-  __shared__ float collected_norms[3 * BLOCK_SIZE];
   __shared__ float collected_extras[MAX_EXTRA_DIMS * BLOCK_SIZE];
 
   // In the forward, we stored the final value for T, the
@@ -540,7 +530,6 @@ renderCUDA(
   float accum_ree[MAX_EXTRA_DIMS] = { 0 };
   float dL_dpixel[C];
   float dL_dpixel_depth;
-  float dL_dpixel_norm[3];
   float dL_dpixel_alpha;
   float dL_dpixel_extra[MAX_EXTRA_DIMS];
   if (inside) 
@@ -548,8 +537,6 @@ renderCUDA(
     for (int i = 0; i < C; i++)
       dL_dpixel[i] = dL_dpixels[i * H * W + pix_id];
     dL_dpixel_depth = dL_dpixel_depths[pix_id];
-    for (int i = 0; i < 3; i++)
-      dL_dpixel_norm[i] = dL_dpixel_norms[i * H * W + pix_id];
     dL_dpixel_alpha = dL_dpixel_alphas[pix_id];
     for (int i = 0; i < ED; i++)
       dL_dpixel_extra[i] = dL_dpixel_extras[i * H * W + pix_id];
@@ -557,7 +544,6 @@ renderCUDA(
   float last_alpha = 0;
   float last_color[C] = { 0 };
   float last_depth = 0;
-  float last_norm[3] = { 0 };
   float last_extra[MAX_EXTRA_DIMS] = { 0 };
   // Gradient of pixel coordinate w.r.t. normalized 
   // screen-space viewport corrdinates (-1 to 1)
@@ -579,8 +565,6 @@ renderCUDA(
       collected_conic_opacity[block.thread_rank()] = conic_opacity[coll_id];
       for (int i = 0; i < C; i++)
         collected_colors[i * BLOCK_SIZE + block.thread_rank()] = colors[coll_id * C + i];
-      for (int i = 0; i < 3; i++)
-        collected_norms[i * BLOCK_SIZE + block.thread_rank()] = norms[coll_id * 3 + i];
       collected_depths[block.thread_rank()] = depths[coll_id];
       for (int i = 0; i < ED; i++)
         collected_extras[i * BLOCK_SIZE + block.thread_rank()] = extras[coll_id * ED + i];
@@ -641,21 +625,7 @@ renderCUDA(
       dL_dalpha += (dep-accum_red) * dL_dpixel_depth;
       atomicAdd(&(dL_ddepths[global_id]), weight * dL_dpixel_depth);
       
-      for (int ch = 0; ch < 3; ch++)
-      {
-        const float n = collected_norms[ch * BLOCK_SIZE + j];
-        // Update last norm (to be used in the next iteration)
-        accum_ren[ch] = last_alpha * last_norm[ch] + (1.f - last_alpha) * accum_ren[ch];
-        last_norm[ch] = n;
-
-        const float dL_dnormch = dL_dpixel_norm[ch];
-        dL_dalpha += (n - accum_ren[ch]) * dL_dnormch;
-        // Update the gradients w.r.t. norm of the Gaussian. 
-        // Atomic, since this pixel is just one of potentially
-        // many that were affected by this Gaussian.
-        atomicAdd(&(dL_dnorm3Ds[global_id * 3 + ch]), weight * dL_dnormch);
-      }
-
+    
       for (int ch = 0; ch < ED; ch++)
       {
         const float e = collected_extras[ch * BLOCK_SIZE + j];
@@ -721,8 +691,6 @@ void BACKWARD::preprocess(
   const glm::vec4* rotations,
   const float scale_modifier,
   const float* cov3Ds,
-  const glm::vec3* norm3Ds,
-  bool is_norm3Ds_precomp,
   const float* viewmatrix,
   const float* projmatrix,
   const float focal_x, float focal_y,
@@ -734,7 +702,6 @@ void BACKWARD::preprocess(
   float* dL_dcolor,
   float* dL_ddepth,
   float* dL_dcov3D,
-  glm::vec3* dL_dnorm3D,
   float* dL_dsh,
   glm::vec3* dL_dscale,
   glm::vec4* dL_drot)
@@ -765,8 +732,6 @@ void BACKWARD::preprocess(
     (float3*)means3D,
     radii,
     shs,
-    (glm::vec3*)norm3Ds,
-    is_norm3Ds_precomp,
     clamped,
     (glm::vec3*)scales,
     (glm::vec4*)rotations,
@@ -779,7 +744,6 @@ void BACKWARD::preprocess(
     dL_dcolor,
     dL_ddepth,
     dL_dcov3D,
-    (glm::vec3*)dL_dnorm3D,
     dL_dsh,
     dL_dscale,
     dL_drot);
@@ -795,13 +759,11 @@ void BACKWARD::render(
   const float4* conic_opacity,
   const float* colors,
   const float* depths,
-  const float* norms,
   const float* extras,
   const float* accum_alphas,
   const uint32_t* n_contrib,
   const float* dL_dpixels,
   const float* dL_dpixel_depths,
-  const float* dL_dpixel_norms,
   const float* dL_dpixel_alphas,
   const float* dL_dpixel_extras,
   float3* dL_dmean2D,
@@ -809,7 +771,6 @@ void BACKWARD::render(
   float* dL_dopacity,
   float* dL_dcolors,
   float* dL_ddepths,
-  float* dL_dnorm3Ds,
   float* dL_dextras)
 {
   renderCUDA<NUM_CHANNELS> << <grid, block >> >(
@@ -821,13 +782,11 @@ void BACKWARD::render(
     conic_opacity,
     colors,
     depths,
-    norms,
     extras,
     accum_alphas,
     n_contrib,
     dL_dpixels,
     dL_dpixel_depths,
-    dL_dpixel_norms,
     dL_dpixel_alphas,
     dL_dpixel_extras,
     dL_dmean2D,
@@ -835,6 +794,5 @@ void BACKWARD::render(
     dL_dopacity,
     dL_dcolors,
     dL_ddepths,
-    dL_dnorm3Ds,
     dL_dextras);
 }

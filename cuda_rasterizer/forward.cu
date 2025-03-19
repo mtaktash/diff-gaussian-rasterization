@@ -210,7 +210,6 @@ __global__ void preprocessCUDA(int P, int D, int M,
   const float* shs,
   bool* clamped,
   const float* cov3Ds_precomp,
-  const float* norm3Ds_precomp,
   const float* colors_precomp,
   const float* viewmatrix,
   const float* projmatrix,
@@ -222,7 +221,6 @@ __global__ void preprocessCUDA(int P, int D, int M,
   float2* points_xy_image,
   float* depths,
   float* cov3Ds,
-  float* norm3Ds,
   float* rgb,
   float4* conic_opacity,
   const dim3 grid,
@@ -262,16 +260,6 @@ __global__ void preprocessCUDA(int P, int D, int M,
     cov3D = cov3Ds + idx * 6;
   }
 
-  const float* norm3D;
-  if (norm3Ds_precomp != nullptr)
-  {
-    norm3D = norm3Ds_precomp + idx * 3;
-  }
-  else
-  {
-    computeNorm3D(scales[idx], scale_modifier, rotations[idx], norm3Ds + idx * 3, idx, (glm::vec3*)orig_points, *cam_pos);
-    norm3D = norm3Ds + idx * 3;
-  }
   // Compute 2D screen-space covariance matrix
   float3 cov = computeCov2D(p_orig, focal_x, focal_y, tan_fovx, tan_fovy, cov3D, viewmatrix);
 
@@ -327,7 +315,6 @@ renderCUDA(
   const int ED,
   const float2* __restrict__ points_xy_image,
   const float* __restrict__ features,
-  const float* __restrict__ norms,
   const float* __restrict__ depths,
   const float* __restrict__ extras,
   const float4* __restrict__ conic_opacity,
@@ -336,7 +323,6 @@ renderCUDA(
   const float* __restrict__ bg_color,
   float* __restrict__ out_color,
   float* __restrict__ out_depth,
-  float* __restrict__ out_norm,
   float* __restrict__ out_extra)
 {
   // Identify current tile and associated min/max pixel range.
@@ -369,7 +355,6 @@ renderCUDA(
   uint32_t last_contributor = 0;
   float C[CHANNELS] = { 0 };
   float D = 0;
-  float N[3] = {0};
   float E[MAX_EXTRA_DIMS] = {0};
   // We assure the extra feature dim ED <= 8
 
@@ -425,8 +410,6 @@ renderCUDA(
       for (int ch = 0; ch < CHANNELS; ch++)
         C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
       D += depths[collected_id[j]] * alpha * T;
-      for (int ch = 0; ch < 3; ch++)
-        N[ch] += norms[collected_id[j] * 3 + ch] * alpha * T;
       for(int ch = 0; ch < ED; ch++)
         E[ch] += extras[collected_id[j] * ED + ch] * alpha * T;
       T = test_T;
@@ -446,9 +429,6 @@ renderCUDA(
     for (int ch = 0; ch < CHANNELS; ch++)
       out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
     out_depth[pix_id] = D;
-    // float len = sqrt(N[0]*N[0] + N[1]*N[1] + N[2]*N[2]) + 1e-6;
-    for (int ch = 0; ch < 3; ch++)
-      out_norm[ch * H * W + pix_id] = N[ch];
     for (int ch = 0; ch < ED; ch++)
       out_extra[ch * H * W + pix_id] = E[ch];
     
@@ -463,7 +443,6 @@ void FORWARD::render(
   const int ED,
   const float2* means2D,
   const float* colors,
-  const float* norms,
   const float* depths,
   const float* extras,
   const float4* conic_opacity,
@@ -472,7 +451,6 @@ void FORWARD::render(
   const float* bg_color,
   float* out_color,
   float* out_depth,
-  float* out_norm,
   float* out_extra)
 {
   renderCUDA<NUM_CHANNELS> << <grid, block >> > (
@@ -481,7 +459,6 @@ void FORWARD::render(
     W, H, ED,
     means2D,
     colors,
-    norms,
     depths,
     extras,
     conic_opacity,
@@ -490,7 +467,6 @@ void FORWARD::render(
     bg_color,
     out_color,
     out_depth,
-    out_norm,
     out_extra);
 }
 
@@ -503,7 +479,6 @@ void FORWARD::preprocess(int P, int D, int M,
   const float* shs,
   bool* clamped,
   const float* cov3Ds_precomp,
-  const float* norm3Ds_precomp,
   const float* colors_precomp,
   const float* viewmatrix,
   const float* projmatrix,
@@ -515,7 +490,6 @@ void FORWARD::preprocess(int P, int D, int M,
   float2* means2D,
   float* depths,
   float* cov3Ds,
-  float* norm3Ds,
   float* rgb,
   float4* conic_opacity,
   const dim3 grid,
@@ -532,7 +506,6 @@ void FORWARD::preprocess(int P, int D, int M,
     shs,
     clamped,
     cov3Ds_precomp,
-    norm3Ds_precomp,
     colors_precomp,
     viewmatrix, 
     projmatrix,
@@ -544,7 +517,6 @@ void FORWARD::preprocess(int P, int D, int M,
     means2D,
     depths,
     cov3Ds,
-    norm3Ds,
     rgb,
     conic_opacity,
     grid,

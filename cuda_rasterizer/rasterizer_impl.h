@@ -34,7 +34,6 @@ namespace CudaRasterizer
     bool* clamped;
     float2* means2D;
     float* cov3D;
-    float* norm3D;
     float4* conic_opacity;
     float* rgb;
     uint32_t* point_offsets;

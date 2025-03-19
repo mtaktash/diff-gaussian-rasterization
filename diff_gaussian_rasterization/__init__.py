@@ -32,11 +32,10 @@ def rasterize_gaussians(
     scales,
     rotations,
     cov3Ds_precomp,
-    norm3Ds_precomp,
     extra_attrs,
     raster_settings,
 ):
-    color, depth, norm, alpha, radii, extra = _RasterizeGaussians.apply(
+    color, depth, alpha, radii, extra = _RasterizeGaussians.apply(
         means3D,
         means2D,
         sh,
@@ -45,14 +44,11 @@ def rasterize_gaussians(
         scales,
         rotations,
         cov3Ds_precomp,
-        norm3Ds_precomp,
         extra_attrs,
         raster_settings,
     )
-
-    norm = torch.nn.functional.normalize(norm, p=2, dim=0)
     # 3, H, W
-    return color, depth, norm, alpha, radii, extra
+    return color, depth, alpha, radii, extra
 
 
 class _RasterizeGaussians(torch.autograd.Function):
@@ -67,7 +63,6 @@ class _RasterizeGaussians(torch.autograd.Function):
         scales,
         rotations,
         cov3Ds_precomp,
-        norm3Ds_precomp,
         extra_attrs,
         raster_settings,
     ):
@@ -83,7 +78,6 @@ class _RasterizeGaussians(torch.autograd.Function):
             rotations,
             raster_settings.scale_modifier,
             cov3Ds_precomp,
-            norm3Ds_precomp,
             extra_attrs,
             extra_attrs.shape[1] if extra_attrs.shape[0] != 0 else 0,
             raster_settings.viewmatrix,
@@ -109,7 +103,6 @@ class _RasterizeGaussians(torch.autograd.Function):
                     num_rendered,
                     color,
                     depth,
-                    norm,
                     alpha,
                     radii,
                     extra,
@@ -128,7 +121,6 @@ class _RasterizeGaussians(torch.autograd.Function):
                 num_rendered,
                 color,
                 depth,
-                norm,
                 alpha,
                 radii,
                 extra,
@@ -146,7 +138,6 @@ class _RasterizeGaussians(torch.autograd.Function):
             scales,
             rotations,
             cov3Ds_precomp,
-            norm3Ds_precomp,
             radii,
             extra_attrs,
             sh,
@@ -155,14 +146,13 @@ class _RasterizeGaussians(torch.autograd.Function):
             imgBuffer,
             alpha,
         )
-        return color, depth, norm, alpha, radii, extra
+        return color, depth, alpha, radii, extra
 
     @staticmethod
     def backward(
         ctx,
         grad_out_color,
         grad_out_depth,
-        grad_out_norm,
         grad_out_alpha,
         _,
         grad_out_extra,
@@ -177,7 +167,6 @@ class _RasterizeGaussians(torch.autograd.Function):
             scales,
             rotations,
             cov3Ds_precomp,
-            norm3Ds_precomp,
             radii,
             extra_attrs,
             sh,
@@ -198,14 +187,12 @@ class _RasterizeGaussians(torch.autograd.Function):
             extra_attrs,
             raster_settings.scale_modifier,
             cov3Ds_precomp,
-            norm3Ds_precomp,
             raster_settings.viewmatrix,
             raster_settings.projmatrix,
             raster_settings.tanfovx,
             raster_settings.tanfovy,
             grad_out_color,
             grad_out_depth,
-            grad_out_norm,
             grad_out_alpha,
             grad_out_extra,
             sh,
@@ -231,7 +218,6 @@ class _RasterizeGaussians(torch.autograd.Function):
                     grad_opacities,
                     grad_means3D,
                     grad_cov3Ds_precomp,
-                    grad_norm3Ds_precomp,
                     grad_sh,
                     grad_scales,
                     grad_rotations,
@@ -250,7 +236,6 @@ class _RasterizeGaussians(torch.autograd.Function):
                 grad_opacities,
                 grad_means3D,
                 grad_cov3Ds_precomp,
-                grad_norm3Ds_precomp,
                 grad_sh,
                 grad_scales,
                 grad_rotations,
@@ -266,7 +251,6 @@ class _RasterizeGaussians(torch.autograd.Function):
             grad_scales,
             grad_rotations,
             grad_cov3Ds_precomp,
-            grad_norm3Ds_precomp,
             grad_extra_attrs,
             None,
         )
@@ -314,7 +298,6 @@ class GaussianRasterizer(nn.Module):
         scales=None,
         rotations=None,
         cov3Ds_precomp=None,
-        norm3Ds_precomp=None,
         extra_attrs=None,
     ):
 
@@ -343,16 +326,13 @@ class GaussianRasterizer(nn.Module):
             raise ValueError(
                 "To support norm and depth prediction, scales == None is not allowed"
             )
-            scales = torch.Tensor([])
         if rotations is None:
             raise ValueError(
                 "To support norm and depth prediction, rotations == None is not allowed"
             )
-            rotations = torch.Tensor([])
         if cov3Ds_precomp is None:
             cov3Ds_precomp = torch.Tensor([])
-        if norm3Ds_precomp is None:
-            norm3Ds_precomp = torch.Tensor([])
+
         if extra_attrs is None:
             extra_attrs = torch.Tensor([])
         # Invoke C++/CUDA rasterization routine
@@ -365,7 +345,6 @@ class GaussianRasterizer(nn.Module):
             scales,
             rotations,
             cov3Ds_precomp,
-            norm3Ds_precomp,
             extra_attrs,
             raster_settings,
         )

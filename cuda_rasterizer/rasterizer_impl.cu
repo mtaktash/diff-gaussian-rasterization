@@ -161,7 +161,6 @@ CudaRasterizer::GeometryState CudaRasterizer::GeometryState::fromChunk(char*& ch
   obtain(chunk, geom.cov3D, P * 6, 128);
   obtain(chunk, geom.conic_opacity, P, 128);
   obtain(chunk, geom.rgb, P * 3, 128);
-  obtain(chunk, geom.norm3D, P * 3, 128);
   obtain(chunk, geom.tiles_touched, P, 128);
   cub::DeviceScan::InclusiveSum(nullptr, geom.scan_size, geom.tiles_touched, geom.tiles_touched, P);
   obtain(chunk, geom.scanning_space, geom.scan_size, 128);
@@ -210,7 +209,6 @@ int CudaRasterizer::Rasterizer::forward(
   const float scale_modifier,
   const float* rotations,
   const float* cov3Ds_precomp,
-  const float* norm3Ds_precomp,
   const float* extra_attrs,
   const float* viewmatrix,
   const float* projmatrix,
@@ -219,7 +217,6 @@ int CudaRasterizer::Rasterizer::forward(
   const bool prefiltered,
   float* out_color,
   float* out_depth,
-  float* out_norm,
   float* out_alpha,
   float* out_extra,
   int* radii,
@@ -256,7 +253,6 @@ int CudaRasterizer::Rasterizer::forward(
     shs,
     geomState.clamped,
     cov3Ds_precomp,
-    norm3Ds_precomp,
     colors_precomp,
     viewmatrix, projmatrix,
     (glm::vec3*)cam_pos,
@@ -267,7 +263,6 @@ int CudaRasterizer::Rasterizer::forward(
     geomState.means2D,
     geomState.depths,
     geomState.cov3D,
-    geomState.norm3D,
     geomState.rgb,
     geomState.conic_opacity,
     tile_grid,
@@ -322,7 +317,6 @@ int CudaRasterizer::Rasterizer::forward(
 
   // Let each tile blend its range of Gaussians independently in parallel
   const float* feature_ptr = colors_precomp != nullptr ? colors_precomp : geomState.rgb;
-  const float* norm_ptr = norm3Ds_precomp != nullptr ? norm3Ds_precomp : geomState.norm3D;
   CHECK_CUDA(FORWARD::render(
     tile_grid, block,
     imgState.ranges,
@@ -330,7 +324,6 @@ int CudaRasterizer::Rasterizer::forward(
     width, height, ED,
     geomState.means2D,
     feature_ptr,
-    norm_ptr,
     geomState.depths,
     extra_attrs,
     geomState.conic_opacity,
@@ -339,7 +332,6 @@ int CudaRasterizer::Rasterizer::forward(
     background,
     out_color,
     out_depth,
-    out_norm,
     out_extra), debug)
 
   return num_rendered;
@@ -358,7 +350,6 @@ void CudaRasterizer::Rasterizer::backward(
   const float scale_modifier,
   const float* rotations,
   const float* cov3Ds_precomp,
-  const float* norm3Ds_precomp,
   const float* extra_attrs,
   const float* viewmatrix,
   const float* projmatrix,
@@ -371,7 +362,6 @@ void CudaRasterizer::Rasterizer::backward(
   const float* accum_alphas,
   const float* dL_dpix,
   const float* dL_dpix_depth,
-  const float* dL_dpix_norm,
   const float* dL_dpix_alpha,
   const float* dL_dpix_extra,
   float* dL_dmean2D,
@@ -381,7 +371,6 @@ void CudaRasterizer::Rasterizer::backward(
   float* dL_ddepth,
   float* dL_dmean3D,
   float* dL_dcov3D,
-  float* dL_dnorm3D,
   float* dL_dsh,
   float* dL_dscale,
   float* dL_drot,
@@ -402,7 +391,6 @@ void CudaRasterizer::Rasterizer::backward(
   // opacity and RGB of Gaussians from per-pixel loss gradients.
   // If we were given precomputed colors and not SHs, use them.
   const float* color_ptr = (colors_precomp != nullptr) ? colors_precomp : geomState.rgb;
-  const float* norm_ptr = (norm3Ds_precomp != nullptr) ? norm3Ds_precomp : geomState.norm3D;
   CHECK_CUDA(BACKWARD::render(
     tile_grid,
     block,
@@ -414,13 +402,11 @@ void CudaRasterizer::Rasterizer::backward(
     geomState.conic_opacity,
     color_ptr,
     geomState.depths,
-    norm_ptr,
     extra_attrs,
     accum_alphas,
     imgState.n_contrib,
     dL_dpix,
     dL_dpix_depth,
-    dL_dpix_norm,
     dL_dpix_alpha,
     dL_dpix_extra,
     (float3*)dL_dmean2D,
@@ -428,7 +414,6 @@ void CudaRasterizer::Rasterizer::backward(
     dL_dopacity,
     dL_dcolor,
     dL_ddepth,
-    dL_dnorm3D,
     dL_dextra), debug)
 
   // Take care of the rest of preprocessing. Was the precomputed covariance
@@ -444,8 +429,6 @@ void CudaRasterizer::Rasterizer::backward(
     (glm::vec4*)rotations,
     scale_modifier,
     cov3D_ptr,
-    (glm::vec3*)norm_ptr,
-    (norm3Ds_precomp != nullptr),
     viewmatrix,
     projmatrix,
     focal_x, focal_y,
@@ -457,7 +440,6 @@ void CudaRasterizer::Rasterizer::backward(
     dL_dcolor,
     dL_ddepth,
     dL_dcov3D,
-    (glm::vec3*)dL_dnorm3D,
     dL_dsh,
     (glm::vec3*)dL_dscale,
     (glm::vec4*)dL_drot), debug)

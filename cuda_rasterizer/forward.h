@@ -30,7 +30,6 @@ namespace FORWARD
     const float* shs,
     bool* clamped,
     const float* cov3Ds_precomp,
-    const float* norm3Ds_precomp,
     const float* colors_precomp,
     const float* viewmatrix,
     const float* projmatrix,
@@ -42,7 +41,6 @@ namespace FORWARD
     float2* points_xy_image,
     float* depths,
     float* cov3Ds,
-    float* norm3Ds,
     float* colors,
     float4* conic_opacity,
     const dim3 grid,
@@ -57,7 +55,6 @@ namespace FORWARD
     int W, int H, int ED,
     const float2* points_xy_image,
     const float* features,
-    const float* norms,
     const float* depths,
     const float* extras,
     const float4* conic_opacity,
@@ -66,7 +63,6 @@ namespace FORWARD
     const float* bg_color,
     float* out_color,
     float* out_depth,
-    float* out_norm,
     float* out_extra);
 }
 
